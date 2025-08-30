@@ -10,5 +10,7 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 }
 
+console.log('firebaseConfig', firebaseConfig) // 加这一行
+
 const app = initializeApp(firebaseConfig)
 export const db = getFirestore(app)
