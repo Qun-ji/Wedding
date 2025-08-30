@@ -2,9 +2,9 @@ import { useEffect } from 'react'
 import Hero from './components/Hero'
 import Timeline from './components/Timeline'
 import Gallery from './components/Gallery'
-import BlessingStatic from './components/BlessingStatic'
+// import BlessingStatic from './components/BlessingStatic'
+import BlessingGuestbook from './components/BlessingGuestbook'
 // 若要启用在线留言板，把上一行注释掉，并取消下一行注释：
-// import BlessingGuestbook from './components/BlessingGuestbook'
 
 export default function App() {
   useEffect(() => {
@@ -28,8 +28,8 @@ export default function App() {
 
         <section id="blessing" className="py-16">
           <h2 className="text-3xl md:text-4xl font-semibold text-center mb-10">祝福</h2>
-          <BlessingStatic />
-          {/* 在线留言板版本：<BlessingGuestbook /> */}
+          {/* <BlessingStatic /> */}
+          <BlessingGuestbook />
         </section>
       </main>
 

@@ -2,10 +2,19 @@ import { useState } from 'react'
 
 // 将你的图片放在 public/photos/ 目录下，并在此登记
 const photos = [
-  '/photos/1.jpg',
-  '/photos/2.jpg',
-  '/photos/3.jpg',
-  '/photos/4.jpg',
+  '/photos/wd1.jpg',
+  '/photos/wd2.jpg',
+  '/photos/wd3.jpg',
+  '/photos/wd4.jpg',
+  // '/photos/wd5.jpg',
+  // '/photos/wd6.jpg',
+  // '/photos/wd7.jpg',
+  // '/photos/wd8.jpg',
+  // '/photos/wd9.jpg',
+  // '/photos/wd10.jpg',
+  // '/photos/wd11.jpg',
+  // '/photos/wd12.jpg',
+  // '/photos/wd13.jpg',
 ]
 
 export default function Gallery() {
