@@ -149,23 +149,32 @@ export default function BlessingGuestbook() {
     if (!trimmed) return
     
     try {
-      await sql`
+      console.log('开始提交留言...')
+      console.log('数据库URL:', import.meta.env.VITE_DATABASE_URL ? '已配置' : '未配置')
+      
+      const result = await sql`
         INSERT INTO blessings (name, message, avatar_url)
         VALUES (${name.trim().slice(0, 20) || '匿名'}, ${trimmed.slice(0, 240)}, ${''})
+        RETURNING id
       `
+      console.log('插入成功:', result)
+      
       setMsg('')
       setShowForm(false)
       
       // 重新获取列表
-      const result = await sql`
+      const updatedList = await sql`
         SELECT id, name, message, avatar_url, created_at 
         FROM blessings 
         ORDER BY created_at DESC
       `
-      setList(result)
+      setList(updatedList)
+      console.log('列表更新成功')
     } catch (error) {
-      console.error('Error submitting blessing:', error)
-      alert('提交失败，请重试')
+      console.error('提交失败详细错误:', error)
+      console.error('错误消息:', error.message)
+      console.error('错误堆栈:', error.stack)
+      alert(`提交失败: ${error.message}`)
     }
   }
 
