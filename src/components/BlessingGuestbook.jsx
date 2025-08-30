@@ -195,9 +195,12 @@ export default function BlessingGuestbook() {
       </div>
       {/* 写祝福按钮 */}
       <button
-        className="fixed md:absolute right-8 bottom-8 z-30 bg-[#A8C3A4] hover:bg-[#F9C784] text-[#0B0C2B] rounded-full shadow-lg px-6 py-3 font-cursive text-lg"
+        className="fixed md:absolute right-4 md:right-8 bottom-4 md:bottom-8 z-30 bg-[#A8C3A4] hover:bg-[#F9C784] text-[#0B0C2B] rounded-full shadow-lg px-4 md:px-6 py-2 md:py-3 font-cursive text-base md:text-lg transition-all duration-200 hover:scale-105"
         onClick={()=>setShowForm(true)}
-      >写一封新的祝福</button>
+      >
+        <span className="hidden md:inline">写一封新的祝福</span>
+        <span className="md:hidden">写祝福</span>
+      </button>
       {/* 信纸弹窗 */}
       <AnimatePresence>
         {showLetter && (
