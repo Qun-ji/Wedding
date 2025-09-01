@@ -213,7 +213,7 @@ export default function BlessingGuestbook() {
     return () => clearTimeout(t)
   }, [])
 
-  // 处理照片上传 - 优化版
+  // 处理照片上传 - 修复版
   const handlePhotoUpload = async (e) => {
     const file = e.target.files[0]
     if (!file) return
@@ -230,12 +230,14 @@ export default function BlessingGuestbook() {
       const localPreviewUrl = URL.createObjectURL(file)
       setPhotoUrl(localPreviewUrl)
       
-      // 异步上传文件，不阻塞UI
-      await uploadTempPhoto(file)
-      // 注意：实际项目中应该使用上传后的URL替换本地预览URL
+      // 异步上传文件，获取实际的Data URL
+      const uploadedDataUrl = await uploadTempPhoto(file)
+      // 使用上传后的Data URL替换本地预览URL，确保提交时使用持久化的URL
+      setPhotoUrl(uploadedDataUrl)
     } catch (error) {
       console.error('上传照片失败:', error)
       alert('上传照片失败，请重试')
+      setPhotoUrl(null)
     } finally {
       setLoading(false)
       // 重置文件输入，允许用户再次选择同一个文件
@@ -243,7 +245,7 @@ export default function BlessingGuestbook() {
     }
   };
   
-  // 开始录音 - 优化版
+  // 开始录音 - 修复版
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -265,12 +267,14 @@ export default function BlessingGuestbook() {
           const localPreviewUrl = URL.createObjectURL(audioBlob)
           setAudioUrl(localPreviewUrl)
           
-          // 异步上传文件
-          await uploadTempAudio(audioBlob)
-          // 注意：实际项目中应该使用上传后的URL替换本地预览URL
+          // 异步上传文件，获取实际的Data URL
+          const uploadedDataUrl = await uploadTempAudio(audioBlob)
+          // 使用上传后的Data URL替换本地预览URL，确保提交时使用持久化的URL
+          setAudioUrl(uploadedDataUrl)
         } catch (error) {
           console.error('上传录音失败:', error)
           alert('上传录音失败，请重试')
+          setAudioUrl(null)
         }
         
         // 停止所有音轨
