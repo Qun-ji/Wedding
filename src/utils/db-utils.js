@@ -1,5 +1,9 @@
 import sql from '../database.js';
 
+// 缓存系统
+const cache = new Map()
+const CACHE_DURATION = 5 * 60 * 1000 // 5分钟
+
 // 创建新表和扩展字段的SQL脚本
 export const initializeExtendedTables = async () => {
   try {
@@ -152,7 +156,18 @@ export const getAllStickers = async () => {
 };
 
 // 获取带媒体的祝福列表
-export const getBlessingsWithMedia = async () => {
+export const getBlessingsWithMedia = async (forceRefresh = false) => {
+  const cacheKey = 'blessingsWithMedia'
+  
+  // 检查缓存是否有效
+  if (!forceRefresh && cache.has(cacheKey)) {
+    const cached = cache.get(cacheKey)
+    if (Date.now() - cached.timestamp < CACHE_DURATION) {
+      console.log('使用缓存的祝福数据')
+      return cached.data
+    }
+  }
+  
   try {
     // 直接尝试执行JOIN查询，这是最高效的方式
     try {
@@ -164,7 +179,12 @@ export const getBlessingsWithMedia = async () => {
         ORDER BY b.created_at DESC;
       `;
       
-      // 如果JOIN查询成功，直接返回结果
+      // 缓存结果
+      cache.set(cacheKey, {
+        data: result,
+        timestamp: Date.now()
+      })
+      
       return result;
     } catch (joinError) {
       // 如果JOIN查询失败（可能是因为sticker_pack表不存在），则执行基础查询
@@ -177,16 +197,33 @@ export const getBlessingsWithMedia = async () => {
       `;
       
       // 补全缺失的贴纸相关字段
-      return basicResult.map(item => ({
+      const data = basicResult.map(item => ({
         ...item,
         sticker_id: null,
         sticker_name: null,
         sticker_image_url: null
-      }));
+      }))
+      
+      // 缓存结果
+      cache.set(cacheKey, {
+        data,
+        timestamp: Date.now()
+      })
+      
+      return data;
     }
   } catch (error) {
     console.error('获取带媒体的祝福列表失败:', error);
     return [];
+  }
+};
+
+// 清除缓存
+export const clearCache = (key) => {
+  if (key) {
+    cache.delete(key)
+  } else {
+    cache.clear()
   }
 };
 
