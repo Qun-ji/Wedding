@@ -129,15 +129,60 @@ export const getAllStickers = async () => {
 // 获取带媒体的祝福列表
 export const getBlessingsWithMedia = async () => {
   try {
-    const result = await sql`
-      SELECT b.id, b.name, b.message, b.avatar_url, b.photo_url, b.audio_url, b.sticker_id, b.created_at, 
-             s.name as sticker_name, s.image_url as sticker_image_url
-      FROM blessings b
-      LEFT JOIN sticker_pack s ON b.sticker_id = s.id
-      ORDER BY b.created_at DESC;
-    `;
+    console.log('执行获取带媒体的祝福列表查询...');
     
-    return result;
+    // 首先尝试简单查询获取基础祝福数据
+    const basicResult = await sql`
+      SELECT id, name, message, avatar_url, created_at 
+      FROM blessings 
+      ORDER BY created_at DESC;
+    `;
+    console.log('基础祝福数据查询结果:', basicResult);
+    
+    // 检查sticker_pack表是否存在
+    try {
+      const stickerTableExists = await sql`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_name = 'sticker_pack'
+        );
+      `;
+      console.log('sticker_pack表存在:', stickerTableExists[0].exists);
+      
+      // 如果存在sticker_pack表，尝试完整的JOIN查询
+      if (stickerTableExists[0].exists) {
+        const result = await sql`
+          SELECT b.id, b.name, b.message, b.avatar_url, b.photo_url, b.audio_url, b.sticker_id, b.created_at, 
+                 s.name as sticker_name, s.image_url as sticker_image_url
+          FROM blessings b
+          LEFT JOIN sticker_pack s ON b.sticker_id = s.id
+          ORDER BY b.created_at DESC;
+        `;
+        console.log('完整JOIN查询结果:', result);
+        return result;
+      } else {
+        // 否则返回基础数据，补全缺失的字段
+        return basicResult.map(item => ({
+          ...item,
+          photo_url: null,
+          audio_url: null,
+          sticker_id: null,
+          sticker_name: null,
+          sticker_image_url: null
+        }));
+      }
+    } catch (stickerError) {
+      console.error('检查sticker_pack表失败:', stickerError);
+      // 出错时也返回基础数据
+      return basicResult.map(item => ({
+        ...item,
+        photo_url: null,
+        audio_url: null,
+        sticker_id: null,
+        sticker_name: null,
+        sticker_image_url: null
+      }));
+    }
   } catch (error) {
     console.error('获取带媒体的祝福列表失败:', error);
     return [];

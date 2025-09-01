@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据库测试</title>
+    <script type="importmap">
+        {
+            "imports": {
+                "@neondatabase/serverless": "https://esm.sh/@neondatabase/serverless@0.9.3"
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .result {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+            white-space: pre-wrap;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <h1>祝福数据库测试</h1>
+    <button onclick="testDatabase()">测试数据库连接和数据</button>
+    <div id="result" class="result">点击按钮开始测试...</div>
+
+    <script type="module">
+        import { neon } from '@neondatabase/serverless';
+        
+        async function testDatabase() {
+            const resultElement = document.getElementById('result');
+            resultElement.innerHTML = '正在连接数据库...';
+            
+            try {
+                // 使用与项目相同的数据库连接信息
+                const databaseUrl = 'postgresql://neondb_owner:npg_BIpmCq67lMrb@ep-quiet-pine-aefsvs3p-pooler.c-2.us-east-2.aws.neon.tech/neondb?channel_binding=require&sslmode=require';
+                const sql = neon(databaseUrl);
+                
+                resultElement.innerHTML += '\n数据库连接中...';
+                
+                // 测试基本连接
+                const testResult = await sql`SELECT 1`;
+                resultElement.innerHTML += '\n数据库连接成功!';
+                
+                // 获取祝福表结构
+                const tableStructure = await sql`
+                    SELECT column_name, data_type 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'blessings';
+                `;
+                resultElement.innerHTML += '\n\n祝福表结构:';
+                resultElement.innerHTML += '\n' + JSON.stringify(tableStructure, null, 2);
+                
+                // 获取祝福数据
+                const blessings = await sql`
+                    SELECT id, name, message, created_at 
+                    FROM blessings 
+                    ORDER BY created_at DESC;
+                `;
+                resultElement.innerHTML += '\n\n祝福数据 (' + blessings.length + '条):';
+                resultElement.innerHTML += '\n' + JSON.stringify(blessings, null, 2);
+                
+                // 尝试使用与组件相同的查询（带JOIN）
+                try {
+                    const blessingsWithMedia = await sql`
+                        SELECT b.id, b.name, b.message, b.avatar_url, b.photo_url, b.audio_url, b.sticker_id, b.created_at, 
+                               s.name as sticker_name, s.image_url as sticker_image_url
+                        FROM blessings b
+                        LEFT JOIN sticker_pack s ON b.sticker_id = s.id
+                        ORDER BY b.created_at DESC;
+                    `;
+                    resultElement.innerHTML += '\n\n带媒体的祝福数据:';
+                    resultElement.innerHTML += '\n' + JSON.stringify(blessingsWithMedia, null, 2);
+                } catch (joinError) {
+                    resultElement.innerHTML += '\n\n带JOIN的查询出错（可能是sticker_pack表不存在）:' + joinError.message;
+                }
+                
+            } catch (error) {
+                resultElement.innerHTML += '\n\n错误:' + error.message;
+                console.error('数据库测试失败:', error);
+            }
+        }
+    </script>
+</body>
+</html>
