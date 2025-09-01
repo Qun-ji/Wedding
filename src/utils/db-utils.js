@@ -1,4 +1,4 @@
-import sql from '../database';
+import sql from '../database.js';
 
 // 创建新表和扩展字段的SQL脚本
 export const initializeExtendedTables = async () => {
@@ -28,10 +28,10 @@ export const initializeExtendedTables = async () => {
     
     // 添加缺失的列
     if (columnsToAdd.length > 0) {
-      await sql`
-        ALTER TABLE blessings
-        ${sql.raw(columnsToAdd.join(', '))};
-      `;
+      // 由于neon库不支持sql.raw，我们需要为每个列添加单独执行ALTER TABLE
+      for (const column of columnsToAdd) {
+        await sql`ALTER TABLE blessings ${column}`;
+      }
       console.log('成功扩展blessings表');
     }
     
@@ -90,59 +90,46 @@ export const insertSampleStickers = async () => {
 // 提交带媒体的祝福
 export const submitBlessingWithMedia = async (name, message, photoUrl = null, audioUrl = null, stickerId = null) => {
   try {
-    // 尝试使用基本字段插入，这是最可靠的方式
-    // 首先准备SQL语句和参数
-    let sqlQuery = `
-      INSERT INTO blessings (name, message, avatar_url, photo_url, audio_url`;
-    
-    const params = [
-      name.trim().slice(0, 20) || '匿名',
-      message.trim().slice(0, 240),
-      '',
-      photoUrl,
-      audioUrl
-    ];
-    
-    // 只有在stickerId有值时才添加到查询中
+    // 根据是否有stickerId选择不同的插入语句格式
+    // 使用模板字符串方式，这是neon库支持的方式
     if (stickerId !== null && stickerId !== undefined) {
-      sqlQuery += `, sticker_id`;
-      params.push(stickerId);
-    }
-    
-    sqlQuery += `) VALUES (${params.map((_, i) => `$${i+1}`).join(', ')})
-      RETURNING id;
-    `;
-    
-    // 执行SQL查询
-    const result = await sql.raw(sqlQuery, params);
-    
-    return result[0].id;
-  } catch (error) {
-    // 检查是否是sticker_id字段不存在的错误
-    if (error.message && error.message.includes('column "sticker_id"')) {
-      console.warn('sticker_id字段不存在，尝试不包含该字段的插入:', error.message);
-      
-      // 简化版插入，不包含sticker_id字段
+      // 尝试包含sticker_id字段的插入
       try {
         const result = await sql`
-          INSERT INTO blessings (name, message, avatar_url, photo_url, audio_url)
+          INSERT INTO blessings (name, message, avatar_url, photo_url, audio_url, sticker_id)
           VALUES (
             ${name.trim().slice(0, 20) || '匿名'},
             ${message.trim().slice(0, 240)},
             ${''},
             ${photoUrl},
-            ${audioUrl}
+            ${audioUrl},
+            ${stickerId}
           )
           RETURNING id;
         `;
         
         return result[0].id;
-      } catch (simpleInsertError) {
-        console.error('简化版插入也失败:', simpleInsertError);
-        throw simpleInsertError;
+      } catch (fullInsertError) {
+        console.warn('包含sticker_id的插入失败，尝试简化版插入:', fullInsertError.message);
+        // 继续执行简化版插入
       }
     }
     
+    // 简化版插入，不包含sticker_id字段
+    const result = await sql`
+      INSERT INTO blessings (name, message, avatar_url, photo_url, audio_url)
+      VALUES (
+        ${name.trim().slice(0, 20) || '匿名'},
+        ${message.trim().slice(0, 240)},
+        ${''},
+        ${photoUrl},
+        ${audioUrl}
+      )
+      RETURNING id;
+    `;
+    
+    return result[0].id;
+  } catch (error) {
     console.error('提交带媒体的祝福失败:', error);
     throw error;
   }
