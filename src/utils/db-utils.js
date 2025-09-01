@@ -90,21 +90,40 @@ export const insertSampleStickers = async () => {
 // 提交带媒体的祝福
 export const submitBlessingWithMedia = async (name, message, photoUrl = null, audioUrl = null, stickerId = null) => {
   try {
-    // 现在数据库已经支持photo_url、audio_url和sticker_id字段，可以完整插入所有媒体数据
-    const result = await sql`
-      INSERT INTO blessings (name, message, avatar_url, photo_url, audio_url, sticker_id)
-      VALUES (
-        ${name.trim().slice(0, 20) || '匿名'},
-        ${message.trim().slice(0, 240)},
-        ${''},
-        ${photoUrl},
-        ${audioUrl},
-        ${stickerId}
-      )
-      RETURNING id;
-    `;
-    
-    return result[0].id;
+    // 首先尝试完整的插入语句（包含所有字段）
+    try {
+      const result = await sql`
+        INSERT INTO blessings (name, message, avatar_url, photo_url, audio_url, sticker_id)
+        VALUES (
+          ${name.trim().slice(0, 20) || '匿名'},
+          ${message.trim().slice(0, 240)},
+          ${''},
+          ${photoUrl},
+          ${audioUrl},
+          ${stickerId}
+        )
+        RETURNING id;
+      `;
+      
+      return result[0].id;
+    } catch (fullInsertError) {
+      console.warn('完整插入失败，尝试简化版插入:', fullInsertError);
+      
+      // 如果失败，尝试更基础的插入语句，只包含必要的字段
+      const result = await sql`
+        INSERT INTO blessings (name, message, avatar_url, photo_url, audio_url)
+        VALUES (
+          ${name.trim().slice(0, 20) || '匿名'},
+          ${message.trim().slice(0, 240)},
+          ${''},
+          ${photoUrl},
+          ${audioUrl}
+        )
+        RETURNING id;
+      `;
+      
+      return result[0].id;
+    }
   } catch (error) {
     console.error('提交带媒体的祝福失败:', error);
     throw error;

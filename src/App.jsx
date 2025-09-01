@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import Hero from './components/Hero'
 // import Timeline from './components/Timeline'
 import Gallery from './components/Gallery'

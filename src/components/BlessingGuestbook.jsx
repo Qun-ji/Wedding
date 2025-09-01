@@ -4,7 +4,8 @@ import {
   submitBlessingWithMedia,
   getBlessingsWithMedia,
   uploadTempPhoto,
-  uploadTempAudio
+  uploadTempAudio,
+  initializeExtendedTables
 } from '../utils/db-utils'
 
 function Clouds({ opacity = 0.1 }) {
@@ -161,8 +162,13 @@ export default function BlessingGuestbook() {
     // 设置初始模拟数据
     setList(mockData);
     
-    const fetchBlessings = async () => {
+    const initializeAndFetch = async () => {
       try {
+        // 首先初始化数据库表结构，确保所有必要的字段都存在
+        await initializeExtendedTables();
+        console.log('数据库表初始化成功');
+        
+        // 然后获取祝福数据
         const result = await getBlessingsWithMedia();
         console.log('通过getBlessingsWithMedia获取到的祝福数据:', result);
         
@@ -172,14 +178,15 @@ export default function BlessingGuestbook() {
         }
         setLoading(false);
       } catch (error) {
-        console.error('获取祝福列表失败:', error);
+        console.error('初始化或获取祝福列表失败:', error);
         setLoading(false);
       }
     };
     
-    fetchBlessings();
-    // 每30秒刷新一次
-    const interval = setInterval(fetchBlessings, 30000);
+    initializeAndFetch();
+    
+    // 优化自动刷新间隔，从30秒改为5分钟，减少性能消耗
+    const interval = setInterval(initializeAndFetch, 300000); // 5分钟 = 300,000毫秒
     return () => clearInterval(interval);
   }, [])
 
