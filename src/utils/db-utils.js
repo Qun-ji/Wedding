@@ -90,41 +90,59 @@ export const insertSampleStickers = async () => {
 // 提交带媒体的祝福
 export const submitBlessingWithMedia = async (name, message, photoUrl = null, audioUrl = null, stickerId = null) => {
   try {
-    // 首先尝试完整的插入语句（包含所有字段）
-    try {
-      const result = await sql`
-        INSERT INTO blessings (name, message, avatar_url, photo_url, audio_url, sticker_id)
-        VALUES (
-          ${name.trim().slice(0, 20) || '匿名'},
-          ${message.trim().slice(0, 240)},
-          ${''},
-          ${photoUrl},
-          ${audioUrl},
-          ${stickerId}
-        )
-        RETURNING id;
-      `;
-      
-      return result[0].id;
-    } catch (fullInsertError) {
-      console.warn('完整插入失败，尝试简化版插入:', fullInsertError);
-      
-      // 如果失败，尝试更基础的插入语句，只包含必要的字段
-      const result = await sql`
-        INSERT INTO blessings (name, message, avatar_url, photo_url, audio_url)
-        VALUES (
-          ${name.trim().slice(0, 20) || '匿名'},
-          ${message.trim().slice(0, 240)},
-          ${''},
-          ${photoUrl},
-          ${audioUrl}
-        )
-        RETURNING id;
-      `;
-      
-      return result[0].id;
+    // 尝试使用基本字段插入，这是最可靠的方式
+    // 首先准备SQL语句和参数
+    let sqlQuery = `
+      INSERT INTO blessings (name, message, avatar_url, photo_url, audio_url`;
+    
+    const params = [
+      name.trim().slice(0, 20) || '匿名',
+      message.trim().slice(0, 240),
+      '',
+      photoUrl,
+      audioUrl
+    ];
+    
+    // 只有在stickerId有值时才添加到查询中
+    if (stickerId !== null && stickerId !== undefined) {
+      sqlQuery += `, sticker_id`;
+      params.push(stickerId);
     }
+    
+    sqlQuery += `) VALUES (${params.map((_, i) => `$${i+1}`).join(', ')})
+      RETURNING id;
+    `;
+    
+    // 执行SQL查询
+    const result = await sql.raw(sqlQuery, params);
+    
+    return result[0].id;
   } catch (error) {
+    // 检查是否是sticker_id字段不存在的错误
+    if (error.message && error.message.includes('column "sticker_id"')) {
+      console.warn('sticker_id字段不存在，尝试不包含该字段的插入:', error.message);
+      
+      // 简化版插入，不包含sticker_id字段
+      try {
+        const result = await sql`
+          INSERT INTO blessings (name, message, avatar_url, photo_url, audio_url)
+          VALUES (
+            ${name.trim().slice(0, 20) || '匿名'},
+            ${message.trim().slice(0, 240)},
+            ${''},
+            ${photoUrl},
+            ${audioUrl}
+          )
+          RETURNING id;
+        `;
+        
+        return result[0].id;
+      } catch (simpleInsertError) {
+        console.error('简化版插入也失败:', simpleInsertError);
+        throw simpleInsertError;
+      }
+    }
+    
     console.error('提交带媒体的祝福失败:', error);
     throw error;
   }
@@ -149,49 +167,29 @@ export const getAllStickers = async () => {
 // 获取带媒体的祝福列表
 export const getBlessingsWithMedia = async () => {
   try {
-    console.log('执行获取带媒体的祝福列表查询...');
-    
-    // 首先尝试简单查询获取基础祝福数据（包含媒体字段）
-    const basicResult = await sql`
-      SELECT id, name, message, avatar_url, created_at, photo_url, audio_url
-      FROM blessings 
-      ORDER BY created_at DESC;
-    `;
-    console.log('基础祝福数据查询结果:', basicResult);
-    
-    // 检查sticker_pack表是否存在
+    // 直接尝试执行JOIN查询，这是最高效的方式
     try {
-      const stickerTableExists = await sql`
-        SELECT EXISTS (
-          SELECT FROM information_schema.tables 
-          WHERE table_name = 'sticker_pack'
-        );
+      const result = await sql`
+        SELECT b.id, b.name, b.message, b.avatar_url, b.photo_url, b.audio_url, b.sticker_id, b.created_at, 
+               s.name as sticker_name, s.image_url as sticker_image_url
+        FROM blessings b
+        LEFT JOIN sticker_pack s ON b.sticker_id = s.id
+        ORDER BY b.created_at DESC;
       `;
-      console.log('sticker_pack表存在:', stickerTableExists[0].exists);
       
-      // 如果存在sticker_pack表，尝试完整的JOIN查询
-      if (stickerTableExists[0].exists) {
-        const result = await sql`
-          SELECT b.id, b.name, b.message, b.avatar_url, b.photo_url, b.audio_url, b.sticker_id, b.created_at, 
-                 s.name as sticker_name, s.image_url as sticker_image_url
-          FROM blessings b
-          LEFT JOIN sticker_pack s ON b.sticker_id = s.id
-          ORDER BY b.created_at DESC;
-        `;
-        console.log('完整JOIN查询结果:', result);
-        return result;
-      } else {
-        // 否则返回基础数据，只补全缺失的贴纸相关字段
-        return basicResult.map(item => ({
-          ...item,
-          sticker_id: null,
-          sticker_name: null,
-          sticker_image_url: null
-        }));
-      }
-    } catch (stickerError) {
-      console.error('检查sticker_pack表失败:', stickerError);
-      // 出错时也返回基础数据，只补全缺失的贴纸相关字段
+      // 如果JOIN查询成功，直接返回结果
+      return result;
+    } catch (joinError) {
+      // 如果JOIN查询失败（可能是因为sticker_pack表不存在），则执行基础查询
+      console.warn('JOIN查询失败，尝试基础查询:', joinError.message);
+      
+      const basicResult = await sql`
+        SELECT id, name, message, avatar_url, created_at, photo_url, audio_url
+        FROM blessings 
+        ORDER BY created_at DESC;
+      `;
+      
+      // 补全缺失的贴纸相关字段
       return basicResult.map(item => ({
         ...item,
         sticker_id: null,

@@ -31,3 +31,54 @@
   background-size: 200% auto;
   animation: shimmer 3s linear infinite;
 }
+
+/* 媒体资源懒加载优化 */
+img.lazy-load {
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+}
+
+img.lazy-load.loaded {
+  opacity: 1;
+}
+
+/* 骨架屏加载效果 */
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+
+/* 优化字体加载显示 */
+.font-display {
+  font-display: swap;
+}
+
+/* 图片渐进式加载动画 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.progressive-image {
+  animation: fadeIn 0.5s ease-in;
+}
+
+/* 减少重排的CSS */
+.contain-layout {
+  contain: layout;
+}
+
+/* 优化渲染性能的CSS */
+.will-change-transform {
+  will-change: transform;
+}
+
+.will-change-opacity {
+  will-change: opacity;
+}

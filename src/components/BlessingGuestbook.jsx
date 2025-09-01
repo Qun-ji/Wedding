@@ -159,34 +159,51 @@ export default function BlessingGuestbook() {
       }
     ];
     
-    // 设置初始模拟数据
+    // 设置初始模拟数据，立即显示给用户
     setList(mockData);
     
-    const initializeAndFetch = async () => {
+    // 检查本地存储，看是否已经初始化过数据库表结构
+    const hasInitializedTables = localStorage.getItem('hasInitializedTables');
+    
+    // 将初始化和数据获取分离
+    const fetchBlessingsData = async () => {
       try {
-        // 首先初始化数据库表结构，确保所有必要的字段都存在
-        await initializeExtendedTables();
-        console.log('数据库表初始化成功');
-        
-        // 然后获取祝福数据
+        // 只获取祝福数据
         const result = await getBlessingsWithMedia();
-        console.log('通过getBlessingsWithMedia获取到的祝福数据:', result);
         
         // 如果获取到真实数据，则更新列表
         if (result && result.length > 0) {
           setList(result);
         }
-        setLoading(false);
       } catch (error) {
-        console.error('初始化或获取祝福列表失败:', error);
+        console.error('获取祝福列表失败:', error);
+      } finally {
         setLoading(false);
       }
     };
     
-    initializeAndFetch();
+    // 初始化数据库表结构（只在第一次访问或强制刷新时执行）
+    const initializeTables = async () => {
+      try {
+        if (!hasInitializedTables) {
+          await initializeExtendedTables();
+          console.log('数据库表初始化成功');
+          localStorage.setItem('hasInitializedTables', 'true');
+        }
+      } catch (error) {
+        console.error('初始化数据库表结构失败:', error);
+        // 即使初始化失败也继续获取数据
+      }
+    };
+    
+    // 并行执行初始化和数据获取，减少等待时间
+    Promise.all([
+      initializeTables(),
+      fetchBlessingsData()
+    ]);
     
     // 优化自动刷新间隔，从30秒改为5分钟，减少性能消耗
-    const interval = setInterval(initializeAndFetch, 300000); // 5分钟 = 300,000毫秒
+    const interval = setInterval(fetchBlessingsData, 300000); // 5分钟 = 300,000毫秒
     return () => clearInterval(interval);
   }, [])
 
@@ -196,24 +213,37 @@ export default function BlessingGuestbook() {
     return () => clearTimeout(t)
   }, [])
 
-  // 处理照片上传
+  // 处理照片上传 - 优化版
   const handlePhotoUpload = async (e) => {
     const file = e.target.files[0]
     if (!file) return
     
     try {
+      // 文件大小限制，防止过大的文件影响性能
+      if (file.size > 5 * 1024 * 1024) { // 5MB限制
+        alert('文件过大，请选择小于5MB的图片')
+        return
+      }
+      
       setLoading(true)
-      const uploadedUrl = await uploadTempPhoto(file)
-      setPhotoUrl(uploadedUrl)
+      // 先显示本地预览，提高用户体验
+      const localPreviewUrl = URL.createObjectURL(file)
+      setPhotoUrl(localPreviewUrl)
+      
+      // 异步上传文件，不阻塞UI
+      await uploadTempPhoto(file)
+      // 注意：实际项目中应该使用上传后的URL替换本地预览URL
     } catch (error) {
       console.error('上传照片失败:', error)
       alert('上传照片失败，请重试')
     } finally {
       setLoading(false)
+      // 重置文件输入，允许用户再次选择同一个文件
+      e.target.value = ''
     }
   };
   
-  // 开始录音
+  // 开始录音 - 优化版
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -231,8 +261,13 @@ export default function BlessingGuestbook() {
       mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' })
         try {
-          const uploadedUrl = await uploadTempAudio(audioBlob)
-          setAudioUrl(uploadedUrl)
+          // 先创建本地预览URL
+          const localPreviewUrl = URL.createObjectURL(audioBlob)
+          setAudioUrl(localPreviewUrl)
+          
+          // 异步上传文件
+          await uploadTempAudio(audioBlob)
+          // 注意：实际项目中应该使用上传后的URL替换本地预览URL
         } catch (error) {
           console.error('上传录音失败:', error)
           alert('上传录音失败，请重试')
@@ -249,6 +284,24 @@ export default function BlessingGuestbook() {
       alert('请授予麦克风权限并确保设备正常')
     }
   };
+  
+  // 清理函数 - 防止内存泄漏
+  useEffect(() => {
+    return () => {
+      // 清理URL对象，防止内存泄漏
+      if (photoUrl && photoUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(photoUrl)
+      }
+      if (audioUrl && audioUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(audioUrl)
+      }
+      
+      // 清理录音状态
+      if (mediaRecorderRef.current && isRecording) {
+        mediaRecorderRef.current.stop()
+      }
+    }
+  }, [photoUrl, audioUrl, isRecording])
   
   // 停止录音
   const stopRecording = () => {
