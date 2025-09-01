@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   submitBlessingWithMedia,
-  getBlessingsWithMedia
+  getBlessingsWithMedia,
+  uploadTempPhoto,
+  uploadTempAudio
 } from '../utils/db-utils'
 
 function Clouds({ opacity = 0.1 }) {
@@ -117,6 +119,12 @@ export default function BlessingGuestbook() {
   const [showForm, setShowForm] = useState(false)
   const [showLetter, setShowLetter] = useState(null)
   const [showMeteor, setShowMeteor] = useState(false)
+  // 媒体相关状态
+  const [photoUrl, setPhotoUrl] = useState(null)
+  const [audioUrl, setAudioUrl] = useState(null)
+  const [isRecording, setIsRecording] = useState(false)
+  const mediaRecorderRef = useRef(null)
+  const audioChunksRef = useRef([])
 
   // 简化初始化过程，只关注获取祝福列表
   
@@ -181,44 +189,112 @@ export default function BlessingGuestbook() {
     return () => clearTimeout(t)
   }, [])
 
-  // 移除照片上传相关功能，因为数据库不支持存储照片
-  const handlePhotoUpload = (e) => {
-    alert('当前版本暂不支持照片上传功能');
+  // 处理照片上传
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    
+    try {
+      setLoading(true)
+      const uploadedUrl = await uploadTempPhoto(file)
+      setPhotoUrl(uploadedUrl)
+    } catch (error) {
+      console.error('上传照片失败:', error)
+      alert('上传照片失败，请重试')
+    } finally {
+      setLoading(false)
+    }
   };
   
-  // 移除录音功能，因为数据库不支持存储录音
-  const startRecording = () => {
-    alert('当前版本暂不支持语音祝福功能');
+  // 开始录音
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mediaRecorder = new MediaRecorder(stream)
+      
+      audioChunksRef.current = []
+      mediaRecorderRef.current = mediaRecorder
+      
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data)
+        }
+      }
+      
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' })
+        try {
+          const uploadedUrl = await uploadTempAudio(audioBlob)
+          setAudioUrl(uploadedUrl)
+        } catch (error) {
+          console.error('上传录音失败:', error)
+          alert('上传录音失败，请重试')
+        }
+        
+        // 停止所有音轨
+        stream.getTracks().forEach(track => track.stop())
+      }
+      
+      mediaRecorder.start()
+      setIsRecording(true)
+    } catch (error) {
+      console.error('开始录音失败:', error)
+      alert('请授予麦克风权限并确保设备正常')
+    }
   };
   
-  // 提交留言（简化版）
+  // 停止录音
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop()
+      setIsRecording(false)
+    }
+  };
+  
+  // 移除媒体
+  const removeMedia = (type) => {
+    if (type === 'photo') {
+      setPhotoUrl(null)
+    } else if (type === 'audio') {
+      setAudioUrl(null)
+    }
+  };
+  
+  // 提交留言（带媒体功能）
   const submit = async (e) => {
     e.preventDefault();
     const trimmed = msg.trim();
     if (!trimmed) return;
     
     try {
-      // 提交祝福（只提交基本信息）
+      setLoading(true)
+      // 提交祝福（包含媒体信息）
       await submitBlessingWithMedia(
         name, 
-        trimmed
+        trimmed,
+        photoUrl,
+        audioUrl
       );
       
       // 重置表单
-      setName('');
-      setMsg('');
-      setShowForm(false);
+      setName('')
+      setMsg('')
+      setPhotoUrl(null)
+      setAudioUrl(null)
+      setShowForm(false)
       
       // 重新获取列表
-      const updatedList = await getBlessingsWithMedia();
-      setList(updatedList);
+      const updatedList = await getBlessingsWithMedia()
+      setList(updatedList)
       
       // 显示流星雨效果
-      setShowMeteor(true);
-      setTimeout(() => setShowMeteor(false), 3200);
+      setShowMeteor(true)
+      setTimeout(() => setShowMeteor(false), 3200)
     } catch (error) {
-      alert(`提交失败: ${error.message}`);
-      console.error('提交祝福失败:', error);
+      alert(`提交失败: ${error.message}`)
+      console.error('提交祝福失败:', error)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -257,9 +333,31 @@ export default function BlessingGuestbook() {
                 <div className="font-cursive text-lg text-[#b87333] mb-2">{showLetter.name||'匿名'}</div>
                 <div className="text-xs text-gray-400">{new Date(showLetter.created_at).toLocaleString()}</div>
               </div>
-              <div className="flex-[2] text-[#0B0C2B] font-inter text-base whitespace-pre-line leading-relaxed border-l-2 border-[#F7D6E0]/40 pl-6 space-y-3">
-                {/* 祝福内容 */}
-                {showLetter.message}
+              <div className="flex-[2] flex flex-col gap-4">
+                <div className="text-[#0B0C2B] font-inter text-base whitespace-pre-line leading-relaxed border-l-2 border-[#F7D6E0]/40 pl-6 space-y-3">
+                  {/* 祝福内容 */}
+                  {showLetter.message}
+                </div>
+                
+                {/* 媒体内容显示 */}
+                <div className="space-y-4">
+                  {showLetter.photo_url && (
+                    <div className="rounded-xl overflow-hidden border-2 border-[#BFC9FF]">
+                      <img 
+                        src={showLetter.photo_url} 
+                        alt="祝福照片" 
+                        className="w-full h-auto object-contain max-h-64"
+                        loading="lazy"
+                      />
+                    </div>
+                  )}
+                  {showLetter.audio_url && (
+                    <div className="bg-[#F7D6E0]/20 p-3 rounded-xl">
+                      <p className="text-sm text-gray-600 mb-2 font-cursive">语音祝福：</p>
+                      <audio controls src={showLetter.audio_url} className="w-full" />
+                    </div>
+                  )}
+                </div>
               </div>
               <button className="absolute right-4 top-4 text-2xl text-[#b87333] hover:text-[#F9C784]" onClick={()=>setShowLetter(null)}>✕</button>
             </motion.div>
@@ -284,21 +382,66 @@ export default function BlessingGuestbook() {
                 id="photo-upload"
               />
               
-              {/* 简化版功能按钮 */}
+              {/* 文件上传隐藏input */}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoUpload}
+                className="hidden"
+                id="photo-upload"
+              />
+              
+              {/* 媒体预览 */}
+              <div className="mt-2 space-y-2">
+                {photoUrl && (
+                  <div className="relative w-full max-h-48 rounded-xl overflow-hidden border-2 border-[#BFC9FF]">
+                    <img src={photoUrl} alt="预览" className="w-full h-full object-contain" />
+                    <button
+                      className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center"
+                      onClick={() => removeMedia('photo')}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+                {audioUrl && (
+                  <div className="relative flex items-center gap-2 p-2 bg-[#F7D6E0]/20 rounded-xl">
+                    <audio controls src={audioUrl} className="w-full" />
+                    <button
+                      className="w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center flex-shrink-0"
+                      onClick={() => removeMedia('audio')}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+              </div>
+              
+              {/* 功能按钮 */}
               <div className="flex gap-2 mt-2">
                 <label 
                   htmlFor="photo-upload" 
                   className="px-4 py-2 rounded-xl bg-[#BFC9FF] text-white font-cursive cursor-pointer hover:bg-opacity-90 transition"
                 >
-                  上传照片（暂不支持）
+                  上传照片
                 </label>
-                <button 
-                  type="button" 
-                  className="px-4 py-2 rounded-xl bg-[#F9C784] text-white font-cursive hover:bg-opacity-90 transition"
-                  onClick={startRecording}
-                >
-                  录制语音（暂不支持）
-                </button>
+                {isRecording ? (
+                  <button 
+                    type="button" 
+                    className="px-4 py-2 rounded-xl bg-[#ff6b6b] text-white font-cursive hover:bg-opacity-90 transition"
+                    onClick={stopRecording}
+                  >
+                    停止录音
+                  </button>
+                ) : (
+                  <button 
+                    type="button" 
+                    className="px-4 py-2 rounded-xl bg-[#F9C784] text-white font-cursive hover:bg-opacity-90 transition"
+                    onClick={startRecording}
+                  >
+                    录制语音
+                  </button>
+                )}
               </div>
               <div className="flex justify-end mt-4 gap-4">
                 <button type="button" className="px-4 py-2 rounded-xl bg-gray-200 text-gray-600 font-cursive" onClick={()=>setShowForm(false)}>取消</button>
