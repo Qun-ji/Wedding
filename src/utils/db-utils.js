@@ -90,15 +90,13 @@ export const insertSampleStickers = async () => {
 // 提交带媒体的祝福
 export const submitBlessingWithMedia = async (name, message, photoUrl = null, audioUrl = null, stickerId = null) => {
   try {
+    // 先尝试只插入基础字段，避免因缺少扩展字段导致提交失败
     const result = await sql`
-      INSERT INTO blessings (name, message, avatar_url, photo_url, audio_url, sticker_id)
+      INSERT INTO blessings (name, message, avatar_url)
       VALUES (
         ${name.trim().slice(0, 20) || '匿名'},
         ${message.trim().slice(0, 240)},
-        ${''},
-        ${photoUrl},
-        ${audioUrl},
-        ${stickerId}
+        ${''}
       )
       RETURNING id;
     `;
