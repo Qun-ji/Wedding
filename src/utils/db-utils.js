@@ -90,15 +90,16 @@ export const insertSampleStickers = async () => {
 // 提交带媒体的祝福
 export const submitBlessingWithMedia = async (name, message, photoUrl = null, audioUrl = null, stickerId = null) => {
   try {
-    // 现在数据库已经支持photo_url和audio_url字段，可以完整插入所有媒体数据
+    // 现在数据库已经支持photo_url、audio_url和sticker_id字段，可以完整插入所有媒体数据
     const result = await sql`
-      INSERT INTO blessings (name, message, avatar_url, photo_url, audio_url)
+      INSERT INTO blessings (name, message, avatar_url, photo_url, audio_url, sticker_id)
       VALUES (
         ${name.trim().slice(0, 20) || '匿名'},
         ${message.trim().slice(0, 240)},
         ${''},
         ${photoUrl},
-        ${audioUrl}
+        ${audioUrl},
+        ${stickerId}
       )
       RETURNING id;
     `;
@@ -131,9 +132,9 @@ export const getBlessingsWithMedia = async () => {
   try {
     console.log('执行获取带媒体的祝福列表查询...');
     
-    // 首先尝试简单查询获取基础祝福数据
+    // 首先尝试简单查询获取基础祝福数据（包含媒体字段）
     const basicResult = await sql`
-      SELECT id, name, message, avatar_url, created_at 
+      SELECT id, name, message, avatar_url, created_at, photo_url, audio_url
       FROM blessings 
       ORDER BY created_at DESC;
     `;
@@ -161,11 +162,9 @@ export const getBlessingsWithMedia = async () => {
         console.log('完整JOIN查询结果:', result);
         return result;
       } else {
-        // 否则返回基础数据，补全缺失的字段
+        // 否则返回基础数据，只补全缺失的贴纸相关字段
         return basicResult.map(item => ({
           ...item,
-          photo_url: null,
-          audio_url: null,
           sticker_id: null,
           sticker_name: null,
           sticker_image_url: null
@@ -173,11 +172,9 @@ export const getBlessingsWithMedia = async () => {
       }
     } catch (stickerError) {
       console.error('检查sticker_pack表失败:', stickerError);
-      // 出错时也返回基础数据
+      // 出错时也返回基础数据，只补全缺失的贴纸相关字段
       return basicResult.map(item => ({
         ...item,
-        photo_url: null,
-        audio_url: null,
         sticker_id: null,
         sticker_name: null,
         sticker_image_url: null
