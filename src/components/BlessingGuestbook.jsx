@@ -1,13 +1,8 @@
-import { useEffect, useState, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import sql from '../database'
 import {
-  initializeExtendedTables,
   submitBlessingWithMedia,
-  getBlessingsWithMedia,
-  getAllStickers,
-  uploadTempPhoto,
-  uploadTempAudio
+  getBlessingsWithMedia
 } from '../utils/db-utils'
 
 function Clouds({ opacity = 0.1 }) {
@@ -72,14 +67,6 @@ function Envelope({ b, onClick }) {
       <div className="absolute left-1/2 bottom-0 -translate-x-1/2 translate-y-1/2 text-xs text-[#b87333] bg-white/80 px-2 py-0.5 rounded shadow opacity-0 group-hover:opacity-100 transition">
         {b.message.slice(0, 8)}{b.message.length>8?'...':''}
       </div>
-      {/* 媒体指示器 */}
-      {(b.photo_url || b.audio_url || b.sticker_id) && (
-        <div className="absolute right-0 top-0 w-4 h-4 flex flex-wrap gap-0.5">
-          {b.photo_url && <div className="w-2 h-2 rounded-full bg-[#BFC9FF]"></div>}
-          {b.audio_url && <div className="w-2 h-2 rounded-full bg-[#F9C784]"></div>}
-          {b.sticker_id && <div className="w-2 h-2 rounded-full bg-[#A8C3A4]"></div>}
-        </div>
-      )}
     </motion.div>
   )
 }
@@ -120,67 +107,7 @@ function MeteorShower({ blessings }) {
   )
 }
 
-// 贴纸选择器组件
-function StickerSelector({ stickers, selectedSticker, onSelectSticker }) {
-  return (
-    <div className="mt-2 p-3 bg-white/80 rounded-xl">
-      <div className="text-sm font-cursive text-[#b87333] mb-2">选择贴纸</div>
-      <div className="flex flex-wrap gap-2">
-        {stickers.map(sticker => (
-          <motion.div
-            key={sticker.id}
-            className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer border-2 ${selectedSticker === sticker.id ? 'border-[#F9C784] bg-[#FFF8F5]' : 'border-transparent'}`}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => onSelectSticker(sticker.id)}
-          >
-            <img src={sticker.image_url} alt={sticker.name} className="w-8 h-8 object-contain" />
-          </motion.div>
-        ))}
-        {selectedSticker && (
-          <motion.button
-            className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer border-2 border-gray-200 text-gray-400"
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => onSelectSticker(null)}
-          >
-            ✕
-          </motion.button>
-        )}
-      </div>
-    </div>
-  )
-}
 
-// 媒体预览组件
-function MediaPreview({ photoUrl, audioUrl, onRemove }) {
-  return (
-    <div className="mt-2 space-y-2">
-      {photoUrl && (
-        <div className="relative w-full max-h-48 rounded-xl overflow-hidden border-2 border-[#BFC9FF]">
-          <img src={photoUrl} alt="预览" className="w-full h-full object-contain" />
-          <button
-            className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center"
-            onClick={() => onRemove('photo')}
-          >
-            ✕
-          </button>
-        </div>
-      )}
-      {audioUrl && (
-        <div className="relative flex items-center gap-2 p-2 bg-[#F7D6E0]/20 rounded-xl">
-          <audio controls src={audioUrl} className="w-full" />
-          <button
-            className="w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center flex-shrink-0"
-            onClick={() => onRemove('audio')}
-          >
-            ✕
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
 
 export default function BlessingGuestbook() {
   const [name, setName] = useState('')
@@ -190,32 +117,8 @@ export default function BlessingGuestbook() {
   const [showForm, setShowForm] = useState(false)
   const [showLetter, setShowLetter] = useState(null)
   const [showMeteor, setShowMeteor] = useState(false)
-  
-  // 新增功能状态
-  const [photoUrl, setPhotoUrl] = useState(null)
-  const [audioUrl, setAudioUrl] = useState(null)
-  const [stickerId, setStickerId] = useState(null)
-  const [stickers, setStickers] = useState([])
-  const [showStickerSelector, setShowStickerSelector] = useState(false)
-  const [isRecording, setIsRecording] = useState(false)
-  const [recordingTime, setRecordingTime] = useState(0)
-  const [recordingBlob, setRecordingBlob] = useState(null)
-  const [showRecordingControls, setShowRecordingControls] = useState(false)
-  
-  // 录音相关引用
-  const mediaRecorderRef = useRef(null)
-  const recordingTimerRef = useRef(null)
 
-  // 初始化数据库表结构和获取贴纸
-  useEffect(() => {
-    const initialize = async () => {
-      await initializeExtendedTables();
-      const stickerList = await getAllStickers();
-      setStickers(stickerList);
-    };
-    
-    initialize();
-  }, []);
+  // 简化初始化过程，只关注获取祝福列表
   
   // 获取留言列表（包含媒体）
   useEffect(() => {
@@ -278,130 +181,33 @@ export default function BlessingGuestbook() {
     return () => clearTimeout(t)
   }, [])
 
-  // 处理照片上传
-  const handlePhotoUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    
-    try {
-      const photoUrl = await uploadTempPhoto(file);
-      setPhotoUrl(photoUrl);
-    } catch (error) {
-      alert('上传照片失败，请重试');
-      console.error('上传照片失败:', error);
-    }
+  // 移除照片上传相关功能，因为数据库不支持存储照片
+  const handlePhotoUpload = (e) => {
+    alert('当前版本暂不支持照片上传功能');
   };
   
-  // 开始录音
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      const audioChunks = [];
-      
-      mediaRecorder.ondataavailable = (event) => {
-        audioChunks.push(event.data);
-      };
-      
-      mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-        setRecordingBlob(audioBlob);
-        
-        // 停止所有音轨
-        stream.getTracks().forEach(track => track.stop());
-      };
-      
-      mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start();
-      setIsRecording(true);
-      setRecordingTime(0);
-      setShowRecordingControls(true);
-      
-      // 开始计时
-      recordingTimerRef.current = setInterval(() => {
-        setRecordingTime(prev => {
-          // 限制录音时间为60秒
-          if (prev >= 60) {
-            stopRecording();
-            return 60;
-          }
-          return prev + 1;
-        });
-      }, 1000);
-    } catch (error) {
-      alert('录音权限被拒绝，请允许麦克风访问');
-      console.error('开始录音失败:', error);
-    }
+  // 移除录音功能，因为数据库不支持存储录音
+  const startRecording = () => {
+    alert('当前版本暂不支持语音祝福功能');
   };
   
-  // 停止录音
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
-      }
-    }
-  };
-  
-  // 保存录音
-  const saveRecording = async () => {
-    if (!recordingBlob) return;
-    
-    try {
-      const audioUrl = await uploadTempAudio(recordingBlob);
-      setAudioUrl(audioUrl);
-      setShowRecordingControls(false);
-      setRecordingBlob(null);
-    } catch (error) {
-      alert('保存录音失败，请重试');
-      console.error('保存录音失败:', error);
-    }
-  };
-  
-  // 取消录音
-  const cancelRecording = () => {
-    stopRecording();
-    setShowRecordingControls(false);
-    setRecordingBlob(null);
-    setRecordingTime(0);
-  };
-  
-  // 移除媒体
-  const removeMedia = (type) => {
-    if (type === 'photo') {
-      setPhotoUrl(null);
-    } else if (type === 'audio') {
-      setAudioUrl(null);
-    }
-  };
-  
-  // 提交留言（带媒体）
+  // 提交留言（简化版）
   const submit = async (e) => {
     e.preventDefault();
     const trimmed = msg.trim();
     if (!trimmed) return;
     
     try {
-      // 提交祝福
+      // 提交祝福（只提交基本信息）
       await submitBlessingWithMedia(
         name, 
-        trimmed, 
-        photoUrl, 
-        audioUrl, 
-        stickerId
+        trimmed
       );
       
       // 重置表单
       setName('');
       setMsg('');
-      setPhotoUrl(null);
-      setAudioUrl(null);
-      setStickerId(null);
       setShowForm(false);
-      setShowStickerSelector(false);
       
       // 重新获取列表
       const updatedList = await getBlessingsWithMedia();
@@ -452,38 +258,8 @@ export default function BlessingGuestbook() {
                 <div className="text-xs text-gray-400">{new Date(showLetter.created_at).toLocaleString()}</div>
               </div>
               <div className="flex-[2] text-[#0B0C2B] font-inter text-base whitespace-pre-line leading-relaxed border-l-2 border-[#F7D6E0]/40 pl-6 space-y-3">
-                {/* 贴纸 */}
-                {showLetter.sticker_image_url && (
-                  <div className="flex items-center gap-2">
-                    <img 
-                      src={showLetter.sticker_image_url} 
-                      alt={showLetter.sticker_name} 
-                      className="w-8 h-8 object-contain"
-                    />
-                    <span className="text-sm text-gray-500">{showLetter.sticker_name}</span>
-                  </div>
-                )}
-                
                 {/* 祝福内容 */}
                 {showLetter.message}
-                
-                {/* 照片 */}
-                {showLetter.photo_url && (
-                  <div className="mt-2">
-                    <img 
-                      src={showLetter.photo_url} 
-                      alt="祝福照片" 
-                      className="w-full max-h-64 object-contain rounded-lg border border-gray-200 shadow-sm"
-                    />
-                  </div>
-                )}
-                
-                {/* 语音 */}
-                {showLetter.audio_url && (
-                  <div className="mt-2">
-                    <audio controls src={showLetter.audio_url} className="w-full" />
-                  </div>
-                )}
               </div>
               <button className="absolute right-4 top-4 text-2xl text-[#b87333] hover:text-[#F9C784]" onClick={()=>setShowLetter(null)}>✕</button>
             </motion.div>
@@ -508,72 +284,22 @@ export default function BlessingGuestbook() {
                 id="photo-upload"
               />
               
-              {/* 可扩展：上传照片、录音、贴纸 */}
+              {/* 简化版功能按钮 */}
               <div className="flex gap-2 mt-2">
                 <label 
                   htmlFor="photo-upload" 
                   className="px-4 py-2 rounded-xl bg-[#BFC9FF] text-white font-cursive cursor-pointer hover:bg-opacity-90 transition"
                 >
-                  上传照片
+                  上传照片（暂不支持）
                 </label>
                 <button 
                   type="button" 
                   className="px-4 py-2 rounded-xl bg-[#F9C784] text-white font-cursive hover:bg-opacity-90 transition"
-                  onClick={isRecording ? stopRecording : startRecording}
-                  disabled={showRecordingControls}
+                  onClick={startRecording}
                 >
-                  {isRecording ? '停止录音' : '录制语音'}
-                </button>
-                <button 
-                  type="button" 
-                  className="px-4 py-2 rounded-xl bg-[#A8C3A4] text-white font-cursive hover:bg-opacity-90 transition"
-                  onClick={() => setShowStickerSelector(!showStickerSelector)}
-                >
-                  贴纸 {stickerId && '✓'}
+                  录制语音（暂不支持）
                 </button>
               </div>
-              
-              {/* 媒体预览 */}
-              <MediaPreview 
-                photoUrl={photoUrl} 
-                audioUrl={audioUrl} 
-                onRemove={removeMedia} 
-              />
-              
-              {/* 录音控制 */}
-              {showRecordingControls && (
-                <div className="mt-2 p-3 bg-white/80 rounded-xl flex items-center justify-between">
-                  <div className="text-sm font-cursive text-[#b87333]">
-                    录音中: {Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, '0')}
-                  </div>
-                  <div className="flex gap-2">
-                    <button 
-                      type="button" 
-                      className="px-3 py-1 rounded-lg bg-gray-200 text-gray-600 text-sm" 
-                      onClick={cancelRecording}
-                    >
-                      取消
-                    </button>
-                    <button 
-                      type="button" 
-                      className="px-3 py-1 rounded-lg bg-[#A8C3A4] text-[#0B0C2B] text-sm" 
-                      onClick={saveRecording}
-                      disabled={isRecording}
-                    >
-                      保存
-                    </button>
-                  </div>
-                </div>
-              )}
-              
-              {/* 贴纸选择器 */}
-              {showStickerSelector && (
-                <StickerSelector 
-                  stickers={stickers} 
-                  selectedSticker={stickerId} 
-                  onSelectSticker={setStickerId} 
-                />
-              )}
               <div className="flex justify-end mt-4 gap-4">
                 <button type="button" className="px-4 py-2 rounded-xl bg-gray-200 text-gray-600 font-cursive" onClick={()=>setShowForm(false)}>取消</button>
                 <button type="submit" className="px-6 py-2 rounded-xl bg-[#A8C3A4] text-[#0B0C2B] font-cursive">寄出祝福</button>
