@@ -1,54 +1,11 @@
 import { neon } from '@neondatabase/serverless'
 
-// 创建模拟的SQL对象
-function createMockSql() {
-  const mockSql = {
-    // 模拟查询函数，返回空数组
-    query: async () => {
-      return []
-    },
-    // 模拟所有可能的SQL操作
-    valueOf: function() {
-      return async () => []
-    }
-  }
-  // 让mockSql可以作为函数调用
-  const mockSqlFunction = async () => []
-  Object.assign(mockSqlFunction, mockSql)
-  return mockSqlFunction
-}
+console.log('数据库URL配置:', import.meta.env.VITE_DATABASE_URL ? '已配置' : '未配置')
+console.log('数据库URL值:', import.meta.env.VITE_DATABASE_URL)
 
-let sql
+// 临时硬编码用于测试
+const databaseUrl = import.meta.env.VITE_DATABASE_URL || 'postgresql://neondb_owner:npg_BIpmCq67lMrb@ep-quiet-pine-aefsvs3p-pooler.c-2.us-east-2.aws.neon.tech/neondb?channel_binding=require&sslmode=require'
 
-// 检查是否在浏览器环境中
-if (typeof window !== 'undefined') {
-  // 在浏览器环境中检测是否是微信
-  const isWeChat = /MicroMessenger/.test(navigator.userAgent)
-  
-  if (isWeChat) {
-    console.log('微信环境检测到，使用模拟数据库连接')
-    sql = createMockSql()
-  } else {
-    // 非微信浏览器环境下正常连接数据库
-    const databaseUrl = import.meta.env.VITE_DATABASE_URL
-    
-    if (!databaseUrl) {
-      console.warn('警告: 数据库URL未配置，部分功能可能无法使用')
-      sql = createMockSql()
-    } else {
-      sql = neon(databaseUrl)
-    }
-  }
-} else {
-  // 服务端环境下正常连接数据库
-  const databaseUrl = import.meta.env.VITE_DATABASE_URL
-  
-  if (!databaseUrl) {
-    console.warn('警告: 数据库URL未配置，部分功能可能无法使用')
-    sql = createMockSql()
-  } else {
-    sql = neon(databaseUrl)
-  }
-}
+const sql = neon(databaseUrl)
 
 export default sql
