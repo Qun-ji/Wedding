@@ -36,5 +36,13 @@ export default defineConfig({
       'Cross-Origin-Opener-Policy': 'same-origin',
       'Cross-Origin-Embedder-Policy': 'require-corp',
     },
+    // 解决SPA路由刷新404问题
+    historyApiFallback: true,
+  },
+  
+  // 预览服务器配置
+  preview: {
+    https: false,
+    historyApiFallback: true,
   },
 })
