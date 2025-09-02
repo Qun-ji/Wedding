@@ -28,7 +28,7 @@ export default defineConfig({
       },
     },
   },
-  // 开发服务器优化
+  // 开发服务器优化 - 确保SPA路由在开发环境正常工作
   server: {
     https: false,
     cors: true,
@@ -37,12 +37,22 @@ export default defineConfig({
       'Cross-Origin-Embedder-Policy': 'require-corp',
     },
     // 解决SPA路由刷新404问题
-    historyApiFallback: true,
+    historyApiFallback: {
+      // 所有未知路径都重定向到index.html
+      index: '/index.html',
+      // 启用日志以帮助调试
+      verbose: true
+    },
   },
   
-  // 预览服务器配置
+  // 预览服务器配置 - 确保SPA路由在预览环境正常工作
   preview: {
     https: false,
-    historyApiFallback: true,
+    historyApiFallback: {
+      // 所有未知路径都重定向到index.html
+      index: '/index.html',
+      // 启用日志以帮助调试
+      verbose: true
+    },
   },
 })
