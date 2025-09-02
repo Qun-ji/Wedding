@@ -7,9 +7,7 @@
   # 指定构建命令
   command = "npm run build"
   # 指定构建环境
-  environment = {
-    NODE_ENV = "production"
-  }
+  environment = { NODE_ENV = "production" }
 
 # 缓存配置 - 加速构建过程
 [build.environment]
