@@ -6,13 +6,13 @@
   publish = "dist"
   # 指定构建命令
   command = "npm run build"
-  # 指定构建环境
-  environment = { NODE_ENV = "production" }
 
-# 缓存配置 - 加速构建过程
+# 环境配置 - 加速构建过程
 [build.environment]
   # 指定Node.js版本
   NODE_VERSION = "20"
+  # 设置生产环境变量
+  NODE_ENV = "production"
 
 # 重定向规则 - 解决SPA路由刷新404问题
 [[redirects]]
@@ -23,9 +23,9 @@
   # 使用200状态码而不是301/302重定向
   status = 200
   # 排除静态资源文件，让它们直接返回
-  conditions = {
-    Query = { path = "!.*\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2|woff|ttf|eot)$" }
-  }
+  [redirects.conditions]
+    [redirects.conditions.Query]
+      path = "!.*\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2|woff|ttf|eot)$"
 
 # 静态资源缓存策略
 [[headers]]
