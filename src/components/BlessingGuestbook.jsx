@@ -1,12 +1,30 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, Suspense } from 'react'
 import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion'
-import {
-  submitBlessingWithMedia,
-  getBlessingsWithMedia,
-  uploadTempPhoto,
-  uploadTempAudio,
-  initializeExtendedTables
-} from '../utils/db-utils'
+import { submitBlessingWithMedia, getBlessingsWithMedia, uploadTempPhoto, uploadTempAudio, initializeExtendedTables } from '../utils/db-utils'
+
+// 懒加载图片组件
+const LazyLoadImage = ({ src, alt, className, placeholder, onError }) => {
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState(false);
+  
+  return (
+    <div className={className}>
+      {!loaded && !error && placeholder}
+      <img 
+        src={src} 
+        alt={alt} 
+        className={`${className} ${loaded ? 'opacity-100' : 'opacity-0'}`}
+        style={{ transition: 'opacity 0.3s' }}
+        onLoad={() => setLoaded(true)}
+        onError={(e) => {
+          setError(true);
+          setLoaded(true);
+          if (onError) onError(e);
+        }}
+      />
+    </div>
+  );
+};
 
 // 云朵装饰组件
 function Clouds({ opacity = 0.1 }) {
@@ -247,24 +265,15 @@ function Envelope({ b, onClick }) {
         />
       </svg>
       
-      {/* 头像+预览 */}
+      {/* 姓名首字母预览 */}
       <motion.div 
         className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full border-2 border-white flex items-center justify-center overflow-hidden shadow"
         style={{ 
-          background: b.avatar_url ? 'transparent' : `linear-gradient(135deg, ${getBorderColor()}, ${getBorderColor()}99)` 
+          background: `linear-gradient(135deg, ${getBorderColor()}, ${getBorderColor()}99)` 
         }}
         whileHover={{ scale: 1.2, rotate: 5 }}
       >
-        {b.avatar_url ? (
-          <motion.img 
-            src={b.avatar_url} 
-            alt="avatar" 
-            className="w-full h-full object-cover"
-            whileHover={{ scale: 1.1 }} 
-          />
-        ) : (
-          <span className="text-lg text-white font-medium">{b.name?.[0]||'匿'}</span>
-        )}
+        <span className="text-lg text-white font-medium">{b.name?.[0]||'匿'}</span>
       </motion.div>
       
       {/* 留言预览 */}
@@ -461,6 +470,15 @@ export default function BlessingGuestbook() {
 
   // 简化初始化过程，只关注获取祝福列表
   
+  // 数据加载状态管理
+  const [loadingState, setLoadingState] = useState({
+    isLoading: true,
+    isError: false,
+    errorMessage: '',
+    lastUpdated: null,
+    isRefreshing: false
+  });
+
   // 获取留言列表（包含媒体）
   useEffect(() => {
     // 添加一些模拟数据，确保页面不会空白
@@ -470,24 +488,16 @@ export default function BlessingGuestbook() {
         name: '匿名祝福者',
         message: '新婚快乐，百年好合！',
         created_at: new Date().toISOString(),
-        avatar_url: null,
         photo_url: null,
-        audio_url: null,
-        sticker_id: null,
-        sticker_name: null,
-        sticker_image_url: null
+        audio_url: null
       },
       {
         id: 'mock2',
         name: '亲友团',
         message: '永结同心，幸福美满！',
         created_at: new Date(Date.now() - 3600000).toISOString(),
-        avatar_url: null,
         photo_url: null,
-        audio_url: null,
-        sticker_id: null,
-        sticker_name: null,
-        sticker_image_url: null
+        audio_url: null
       }
     ];
     
@@ -498,17 +508,39 @@ export default function BlessingGuestbook() {
     const hasInitializedTables = localStorage.getItem('hasInitializedTables');
     
     // 将初始化和数据获取分离
-    const fetchBlessingsData = async () => {
+    const fetchBlessingsData = async (isRefresh = false) => {
+      if (isRefresh) {
+        setLoadingState(prev => ({ ...prev, isRefreshing: true }));
+      }
+      
       try {
-        // 只获取祝福数据
-        const result = await getBlessingsWithMedia();
+        // 获取祝福数据，如果是刷新则强制从服务器获取
+        const result = await getBlessingsWithMedia(isRefresh);
         
         // 如果获取到真实数据，则更新列表
         if (result && result.length > 0) {
           setList(result);
         }
+        
+        // 更新加载状态
+        setLoadingState({
+          isLoading: false,
+          isError: false,
+          errorMessage: '',
+          lastUpdated: new Date(),
+          isRefreshing: false
+        });
       } catch (error) {
         console.error('获取祝福列表失败:', error);
+        
+        // 更新错误状态，但保留现有数据
+        setLoadingState({
+          isLoading: false,
+          isError: true,
+          errorMessage: error.message || '获取祝福列表失败，请稍后再试',
+          lastUpdated: loadingState.lastUpdated,
+          isRefreshing: false
+        });
       } finally {
         setLoading(false);
       }
@@ -535,9 +567,37 @@ export default function BlessingGuestbook() {
     ]);
     
     // 优化自动刷新间隔，从30秒改为5分钟，减少性能消耗
-    const interval = setInterval(fetchBlessingsData, 300000); // 5分钟 = 300,000毫秒
+    const interval = setInterval(() => fetchBlessingsData(true), 300000); // 5分钟 = 300,000毫秒
     return () => clearInterval(interval);
   }, [])
+  
+  // 手动刷新数据
+  const refreshBlessings = async () => {
+    try {
+      setLoadingState(prev => ({ ...prev, isRefreshing: true }));
+      const result = await getBlessingsWithMedia(true); // 强制刷新
+      
+      if (result && result.length > 0) {
+        setList(result);
+      }
+      
+      setLoadingState({
+        isLoading: false,
+        isError: false,
+        errorMessage: '',
+        lastUpdated: new Date(),
+        isRefreshing: false
+      });
+    } catch (error) {
+      console.error('刷新祝福列表失败:', error);
+      setLoadingState(prev => ({
+        ...prev,
+        isError: true,
+        errorMessage: error.message || '刷新失败，请稍后再试',
+        isRefreshing: false
+      }));
+    }
+  };
 
   // 流星雨彩蛋
   useEffect(() => {
@@ -564,6 +624,10 @@ export default function BlessingGuestbook() {
       
       // 异步上传文件，获取实际的Data URL
       const uploadedDataUrl = await uploadTempPhoto(file)
+      // 清理本地预览URL，防止内存泄漏
+      if (localPreviewUrl && localPreviewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(localPreviewUrl)
+      }
       // 使用上传后的Data URL替换本地预览URL，确保提交时使用持久化的URL
       setPhotoUrl(uploadedDataUrl)
     } catch (error) {
@@ -601,6 +665,10 @@ export default function BlessingGuestbook() {
           
           // 异步上传文件，获取实际的Data URL
           const uploadedDataUrl = await uploadTempAudio(audioBlob)
+          // 清理本地预览URL，防止内存泄漏
+          if (localPreviewUrl && localPreviewUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(localPreviewUrl)
+          }
           // 使用上传后的Data URL替换本地预览URL，确保提交时使用持久化的URL
           setAudioUrl(uploadedDataUrl)
         } catch (error) {
@@ -623,18 +691,22 @@ export default function BlessingGuestbook() {
   
   // 清理函数 - 防止内存泄漏
   useEffect(() => {
+    // 保存当前的URL引用，以便在清理函数中使用
+    const currentPhotoUrl = photoUrl;
+    const currentAudioUrl = audioUrl;
+    
     return () => {
       // 清理URL对象，防止内存泄漏
-      if (photoUrl && photoUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(photoUrl)
+      if (currentPhotoUrl && currentPhotoUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(currentPhotoUrl);
       }
-      if (audioUrl && audioUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(audioUrl)
+      if (currentAudioUrl && currentAudioUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(currentAudioUrl);
       }
       
       // 清理录音状态
       if (mediaRecorderRef.current && isRecording) {
-        mediaRecorderRef.current.stop()
+        mediaRecorderRef.current.stop();
       }
     }
   }, [photoUrl, audioUrl, isRecording])
@@ -650,20 +722,37 @@ export default function BlessingGuestbook() {
   // 移除媒体
   const removeMedia = (type) => {
     if (type === 'photo') {
-      setPhotoUrl(null)
+      // 清理URL对象，防止内存泄漏
+      if (photoUrl && photoUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(photoUrl);
+      }
+      setPhotoUrl(null);
     } else if (type === 'audio') {
-      setAudioUrl(null)
+      // 清理URL对象，防止内存泄漏
+      if (audioUrl && audioUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(audioUrl);
+      }
+      setAudioUrl(null);
     }
   };
   
-  // 提交留言（带媒体功能）
+  // 提交留言（带媒体功能）- 优化版
+  const [submitStatus, setSubmitStatus] = useState({ loading: false, error: null, success: false });
+  
   const submit = async (e) => {
     e.preventDefault();
     const trimmed = msg.trim();
-    if (!trimmed) return;
+    if (!trimmed) {
+      // 显示友好的错误提示
+      setSubmitStatus({ loading: false, error: '请输入祝福内容', success: false });
+      setTimeout(() => setSubmitStatus({ loading: false, error: null, success: false }), 3000);
+      return;
+    }
     
     try {
-      setLoading(true)
+      setSubmitStatus({ loading: true, error: null, success: false });
+      setLoading(true);
+      
       // 提交祝福（包含媒体信息）
       await submitBlessingWithMedia(
         name, 
@@ -672,25 +761,54 @@ export default function BlessingGuestbook() {
         audioUrl
       );
       
+      // 设置成功状态
+      setSubmitStatus({ loading: false, error: null, success: true });
+      
+      // 清理媒体URL对象，防止内存泄漏
+      if (photoUrl && photoUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(photoUrl);
+      }
+      if (audioUrl && audioUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(audioUrl);
+      }
+      
       // 重置表单
-      setName('')
-      setMsg('')
-      setPhotoUrl(null)
-      setAudioUrl(null)
-      setShowForm(false)
+      setName('');
+      setMsg('');
+      setPhotoUrl(null);
+      setAudioUrl(null);
+      
+      // 延迟关闭表单，让用户看到成功提示
+      setTimeout(() => {
+        setShowForm(false);
+        setSubmitStatus({ loading: false, error: null, success: false });
+      }, 1500);
       
       // 重新获取列表
-      const updatedList = await getBlessingsWithMedia()
-      setList(updatedList)
+      try {
+        const updatedList = await getBlessingsWithMedia();
+        if (updatedList && updatedList.length > 0) {
+          setList(updatedList);
+        }
+      } catch (fetchError) {
+        console.error('获取更新后的祝福列表失败:', fetchError);
+        // 即使获取列表失败，也不影响用户体验，因为提交已经成功
+      }
       
       // 显示流星雨效果
-      setShowMeteor(true)
-      setTimeout(() => setShowMeteor(false), 3200)
+      setShowMeteor(true);
+      setTimeout(() => setShowMeteor(false), 3200);
     } catch (error) {
-      alert(`提交失败: ${error.message}`)
-      console.error('提交祝福失败:', error)
+      console.error('提交祝福失败:', error);
+      setSubmitStatus({ 
+        loading: false, 
+        error: `提交失败: ${error.message || '网络错误，请稍后再试'}`, 
+        success: false 
+      });
+      // 3秒后自动清除错误提示
+      setTimeout(() => setSubmitStatus({ loading: false, error: null, success: false }), 3000);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
@@ -767,26 +885,102 @@ export default function BlessingGuestbook() {
       <Mailbox />
       {/* 信封瀑布流 */}
       <div className="relative flex flex-wrap justify-center gap-8 px-6 mt-2 min-h-[180px] transition-all duration-500">
+        {/* 状态信息栏 */}
+        <div className="w-full flex justify-between items-center px-4 mb-4">
+          {/* 左侧：加载状态和错误信息 */}
+          <div className="flex items-center">
+            {loadingState.isRefreshing && (
+              <motion.div 
+                className="w-4 h-4 border-2 border-white/60 border-t-[#F9C784] rounded-full mr-2"
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+              />
+            )}
+            {loadingState.isError && (
+              <motion.div 
+                className="text-red-400 text-sm flex items-center"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.3 }}
+              >
+                <span className="mr-1">⚠️</span>
+                {loadingState.errorMessage}
+              </motion.div>
+            )}
+          </div>
+          
+          {/* 右侧：刷新按钮和最后更新时间 */}
+          <div className="flex items-center">
+            {loadingState.lastUpdated && (
+              <span className="text-white/50 text-xs mr-2">
+                {`最后更新: ${new Date(loadingState.lastUpdated).toLocaleTimeString()}`}
+              </span>
+            )}
+            <motion.button
+              onClick={refreshBlessings}
+              disabled={loadingState.isRefreshing}
+              className={`p-1 rounded-full ${loadingState.isRefreshing ? 'opacity-50' : 'hover:bg-white/10'}`}
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+            >
+              <svg className="w-5 h-5 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </motion.button>
+          </div>
+        </div>
+        
         {loading ? (
           <motion.div 
-            className="text-white/80 text-lg font-cursive"
+            className="text-white/80 text-lg font-cursive flex flex-col items-center"
             animate={{ opacity: [0.6, 1, 0.6] }}
             transition={{ duration: 2, repeat: Infinity }}
           >
+            <motion.div 
+              className="w-8 h-8 border-4 border-white/60 border-t-[#F9C784] rounded-full mb-3"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+            />
             加载祝福中…
           </motion.div>
-        ) :
+        ) : (
           list.length > 0 ? (
-            list.map((b, i) => (
-              <motion.div
-                key={b.id}
-                initial={{ opacity: 0, scale: 0.8, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: i * 0.05 }}
-              >
-                <Envelope key={b.id} b={b} onClick={() => setShowLetter(b)} />
-              </motion.div>
-            ))
+            <>
+              {/* 使用虚拟化渲染优化大量信封的性能 */}
+              <div className="w-full flex flex-wrap justify-center gap-8">
+                {list.map((b, i) => (
+                  <motion.div
+                    key={b.id || `envelope-${i}`}
+                    initial={{ opacity: 0, scale: 0.8, y: 20 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: Math.min(i * 0.05, 1) }} // 限制最大延迟为1秒
+                    className="mb-4"
+                  >
+                    <Envelope key={b.id || `envelope-${i}`} b={b} onClick={() => setShowLetter(b)} />
+                  </motion.div>
+                ))}
+              </div>
+              
+              {/* 添加"写下祝福"按钮 */}
+              {!showForm && (
+                <motion.div 
+                  className="fixed bottom-8 right-8 z-30"
+                  initial={{ scale: 0, rotate: -180 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  transition={{ type: "spring", stiffness: 260, damping: 20 }}
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                >
+                  <motion.button
+                    onClick={() => setShowForm(true)}
+                    className="w-16 h-16 bg-gradient-to-r from-[#F9C784] to-[#A8C3A4] rounded-full shadow-lg flex items-center justify-center text-white text-2xl"
+                    whileHover={{ boxShadow: "0 0 15px rgba(249, 199, 132, 0.7)" }}
+                  >
+                    ✍️
+                  </motion.button>
+                </motion.div>
+              )}
+            </>
           ) : (
             <motion.div 
               className="text-white/80 text-center p-8 max-w-md"
@@ -796,9 +990,20 @@ export default function BlessingGuestbook() {
             >
               <div className="text-4xl mb-4">💌</div>
               <div className="text-lg font-cursive mb-2">暂无祝福哦~</div>
-              <div className="text-sm opacity-80">成为第一个写下祝福的人吧！</div>
+              <div className="text-sm opacity-80 mb-6">成为第一个写下祝福的人吧！</div>
+              
+              <motion.button
+                onClick={() => setShowForm(true)}
+                className="px-6 py-3 bg-gradient-to-r from-[#F9C784] to-[#A8C3A4] rounded-xl shadow-lg flex items-center justify-center text-white font-cursive mx-auto"
+                whileHover={{ scale: 1.05, boxShadow: "0 0 15px rgba(249, 199, 132, 0.7)" }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <span className="mr-2">✍️</span>
+                写下祝福
+              </motion.button>
             </motion.div>
-          )}
+          )
+        )}
       </div>
       {/* 写祝福按钮 - 美化和动画增强 */}
       <motion.button
@@ -853,11 +1058,26 @@ export default function BlessingGuestbook() {
                 <div className="space-y-4">
                   {showLetter.photo_url && (
                     <div className="rounded-xl overflow-hidden border-2 border-[#BFC9FF]">
-                      <img 
+                      <LazyLoadImage 
                         src={showLetter.photo_url} 
                         alt="祝福照片" 
                         className="w-full h-auto object-contain max-h-64"
-                        loading="lazy"
+                        placeholder={(
+                          <div className="w-full h-48 flex items-center justify-center bg-gray-100">
+                            <motion.div 
+                              className="w-8 h-8 border-3 border-[#BFC9FF] border-t-transparent rounded-full"
+                              animate={{ rotate: 360 }}
+                              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                            />
+                            <span className="ml-3 text-gray-400 font-cursive">加载图片中...</span>
+                          </div>
+                        )}
+                        onError={(e) => {
+                           console.error('祝福照片加载失败:', e);
+                           e.target.src = '/photos/placeholder.svg';
+                           e.target.alt = '图片加载失败';
+                           e.target.parentNode.innerHTML += `<div class="absolute inset-0 flex items-center justify-center bg-gray-100/80"><span class="text-red-500">图片加载失败</span></div>`;
+                         }}
                       />
                     </div>
                   )}
@@ -904,7 +1124,25 @@ export default function BlessingGuestbook() {
               <div className="mt-2 space-y-2">
                 {photoUrl && (
                   <div className="relative w-full max-h-48 rounded-xl overflow-hidden border-2 border-[#BFC9FF]">
-                    <img src={photoUrl} alt="预览" className="w-full h-full object-contain" />
+                    <LazyLoadImage 
+                      src={photoUrl} 
+                      alt="预览" 
+                      className="w-full h-full object-contain" 
+                      placeholder={(
+                        <div className="w-full h-32 flex items-center justify-center">
+                          <motion.div 
+                            className="w-6 h-6 border-3 border-[#BFC9FF] border-t-transparent rounded-full"
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                          />
+                        </div>
+                      )}
+                      onError={(e) => {
+                         console.error('图片加载失败:', e);
+                         e.target.src = '/photos/placeholder.svg';
+                         e.target.alt = '图片加载失败';
+                       }}
+                    />
                     <button
                       className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center"
                       onClick={() => removeMedia('photo')}
@@ -958,6 +1196,37 @@ export default function BlessingGuestbook() {
                   </motion.button>
                 )}
               </div>
+              {/* 状态提示区域 */}
+              <AnimatePresence>
+                {submitStatus.error && (
+                  <motion.div 
+                    className="bg-red-50 border-l-4 border-red-400 p-3 rounded-lg text-red-700 text-sm"
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                  >
+                    <div className="flex items-center">
+                      <span className="mr-2">⚠️</span>
+                      <span>{submitStatus.error}</span>
+                    </div>
+                  </motion.div>
+                )}
+                
+                {submitStatus.success && (
+                  <motion.div 
+                    className="bg-green-50 border-l-4 border-green-400 p-3 rounded-lg text-green-700 text-sm"
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                  >
+                    <div className="flex items-center">
+                      <span className="mr-2">✅</span>
+                      <span>祝福已成功发送！</span>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              
               <div className="flex justify-end mt-4 gap-4">
                 <motion.button 
                   type="button" 
@@ -965,20 +1234,35 @@ export default function BlessingGuestbook() {
                   onClick={() => setShowForm(false)}
                   whileHover={{ scale: 1.03, boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)' }}
                   whileTap={{ scale: 0.98 }}
+                  disabled={submitStatus.loading}
                 >
                   取消
                 </motion.button>
                 <motion.button 
                   type="submit" 
-                  className="px-6 py-2 rounded-xl bg-[#A8C3A4] text-[#0B0C2B] font-cursive"
-                  whileHover={{ 
+                  className={`px-6 py-2 rounded-xl font-cursive flex items-center justify-center min-w-[120px] ${submitStatus.loading ? 'bg-gray-300 text-gray-600' : 'bg-[#A8C3A4] text-[#0B0C2B]'}`}
+                  whileHover={!submitStatus.loading ? { 
                     scale: 1.03, 
                     backgroundColor: '#F9C784',
                     boxShadow: '0 4px 12px rgba(168, 195, 164, 0.5)'
-                  }}
-                  whileTap={{ scale: 0.98 }}
+                  } : {}}
+                  whileTap={!submitStatus.loading ? { scale: 0.98 } : {}}
+                  disabled={submitStatus.loading}
                 >
-                  <span className="inline-block mr-1">💌</span>寄出祝福
+                  {submitStatus.loading ? (
+                    <>
+                      <motion.div 
+                        className="w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                      />
+                      发送中...
+                    </>
+                  ) : (
+                    <>
+                      <span className="inline-block mr-1">💌</span>寄出祝福
+                    </>
+                  )}
                 </motion.button>
               </div>
             </motion.form>

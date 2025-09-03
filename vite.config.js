@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  base: './',
+  base: '/',
   // 优化配置
   build: {
     minify: 'terser',
@@ -19,7 +19,6 @@ export default defineConfig({
         manualChunks(id) {
           // 将大型依赖分包
           if (id.includes('node_modules')) {
-            if (id.includes('firebase')) return 'firebase';
             if (id.includes('framer-motion')) return 'framer-motion';
             if (id.includes('pg') || id.includes('neon')) return 'database';
             return 'vendor';
@@ -30,6 +29,7 @@ export default defineConfig({
   },
   // 开发服务器优化 - 确保SPA路由在开发环境正常工作
   server: {
+    port: 5173,
     https: false,
     cors: true,
     headers: {

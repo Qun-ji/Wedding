@@ -5,14 +5,39 @@ const isViteEnvironment = typeof import.meta !== 'undefined' && typeof import.me
 
 // 根据环境获取数据库URL
 let databaseUrl;
+let isDatabaseConfigured = true;
+
 if (isViteEnvironment) {
-  console.log('数据库URL配置:', import.meta.env.VITE_DATABASE_URL ? '已配置' : '未配置');
-  databaseUrl = import.meta.env.VITE_DATABASE_URL || 'postgresql://neondb_owner:npg_BIpmCq67lMrb@ep-quiet-pine-aefsvs3p-pooler.c-2.us-east-2.aws.neon.tech/neondb?channel_binding=require&sslmode=require';
+  // 使用环境变量，避免硬编码凭据
+  databaseUrl = import.meta.env.VITE_DATABASE_URL;
+  if (!databaseUrl) {
+    console.warn('警告: 未配置数据库URL环境变量(VITE_DATABASE_URL)，请在.env.local文件中配置');
+    isDatabaseConfigured = false;
+    // 使用一个占位符，确保开发时能够识别问题
+    databaseUrl = 'postgresql://user:password@localhost:5432/db?sslmode=require';
+  }
 } else {
-  // 直接Node.js环境下使用硬编码的URL
-  databaseUrl = 'postgresql://neondb_owner:npg_BIpmCq67lMrb@ep-quiet-pine-aefsvs3p-pooler.c-2.us-east-2.aws.neon.tech/neondb?channel_binding=require&sslmode=require';
+  // 在非Vite环境中，应该使用环境变量
+  databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    console.error('错误: 未配置数据库URL环境变量');
+    isDatabaseConfigured = false;
+    // 使用一个占位符，确保能够识别问题
+    databaseUrl = 'postgresql://user:password@localhost:5432/db?sslmode=require';
+  }
 }
 
-const sql = neon(databaseUrl)
+// 创建数据库连接
+let sql;
+try {
+  sql = neon(databaseUrl);
+} catch (error) {
+  console.error('数据库连接初始化失败:', error);
+  // 创建一个模拟的sql函数，避免应用崩溃
+  sql = async () => {
+    throw new Error('数据库未正确配置或连接失败');
+  };
+}
 
-export default sql
+export default sql;
+export { isDatabaseConfigured };

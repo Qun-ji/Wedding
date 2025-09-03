@@ -7,6 +7,20 @@ const photos = [
   '/photos/wd2.jpg',
   '/photos/wd3.jpg',
   '/photos/wd4.jpg',
+  '/photos/wd5.jpg',
+  '/photos/wd6.jpg',
+  '/photos/wd7.jpg',
+  '/photos/wd8.jpg',
+  '/photos/wd9.jpg',
+  '/photos/wd10.jpg',
+  '/photos/wd11.jpg',
+  '/photos/wd12.jpg',
+  '/photos/wd13.jpg',
+  '/photos/wd14.jpg',
+  '/photos/hz1.jpg',
+  '/photos/hz2.jpg',
+  '/photos/hz3.jpg',
+  '/photos/hz4.jpg',
 ]
 
 // 获取照片的alt描述
@@ -15,7 +29,21 @@ const getPhotoAlt = (index) => {
     '美好时光',
     '甜蜜回忆',
     '幸福瞬间',
-    '永恒爱情'
+    '永恒爱情',
+    '浪漫时刻',
+    '幸福相伴',
+    '爱的誓言',
+    '甜蜜约定',
+    '温馨瞬间',
+    '美好未来',
+    '携手一生',
+    '爱的见证',
+    '幸福旅程',
+    '美好祝愿',
+    '婚纱照片',
+    '婚礼现场',
+    '婚礼仪式',
+    '婚礼庆典'
   ]
   return altTexts[index] || `婚礼照片 ${index + 1}`
 }
@@ -58,11 +86,40 @@ function FloatingHearts() {
 export default function Gallery() {
   const [current, setCurrent] = useState(0)
   const [isTransitioning, setIsTransitioning] = useState(false)
+  const [loadedImages, setLoadedImages] = useState({})
   const galleryRef = useRef(null)
   const { scrollYProgress } = useScroll()
   
   // 滚动时的视差效果
   const parallaxY = useTransform(scrollYProgress, [0, 0.5], [50, -50])
+  
+  // 预加载图片
+  const preloadImage = (src) => {
+    if (!loadedImages[src]) {
+      const img = new Image()
+      img.src = src
+      img.onload = () => {
+        setLoadedImages(prev => ({
+          ...prev,
+          [src]: true
+        }))
+      }
+    }
+  }
+  
+  // 预加载当前、前一张和后一张图片
+  useEffect(() => {
+    // 当前图片
+    preloadImage(photos[current])
+    
+    // 前一张图片
+    const prevIndex = (current - 1 + photos.length) % photos.length
+    preloadImage(photos[prevIndex])
+    
+    // 后一张图片
+    const nextIndex = (current + 1) % photos.length
+    preloadImage(photos[nextIndex])
+  }, [current])
   
   const prev = () => {
     if (!isTransitioning) {
@@ -80,13 +137,39 @@ export default function Gallery() {
     }
   }
   
-  // 自动轮播
+  // 自动轮播 - 添加用户交互暂停功能
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (!isTransitioning) next()
-    }, 5000)
+    let interval
+    let pauseTimeout
+    let isPaused = false
     
-    return () => clearInterval(interval)
+    const startInterval = () => {
+      interval = setInterval(() => {
+        if (!isTransitioning && !isPaused) next()
+      }, 5000)
+    }
+    
+    const pauseAutoplay = () => {
+      isPaused = true
+      clearTimeout(pauseTimeout)
+      pauseTimeout = setTimeout(() => {
+        isPaused = false
+      }, 10000) // 用户交互后暂停10秒
+    }
+    
+    startInterval()
+    
+    // 用户交互时暂停自动播放
+    const handleUserInteraction = () => pauseAutoplay()
+    galleryRef.current?.addEventListener('mouseenter', handleUserInteraction)
+    galleryRef.current?.addEventListener('touchstart', handleUserInteraction)
+    
+    return () => {
+      clearInterval(interval)
+      clearTimeout(pauseTimeout)
+      galleryRef.current?.removeEventListener('mouseenter', handleUserInteraction)
+      galleryRef.current?.removeEventListener('touchstart', handleUserInteraction)
+    }
   }, [current, isTransitioning])
   
   // 键盘导航
@@ -150,7 +233,12 @@ export default function Gallery() {
               >
                 {/* 照片容器 */}
                 <div className="relative w-full h-full">
-                  {/* 照片 */}
+                  {/* 照片 - 添加加载状态和错误处理 */}
+                  {!loadedImages[photos[current]] && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-gray-100/30 backdrop-blur-sm">
+                      <div className="w-12 h-12 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin"></div>
+                    </div>
+                  )}
                   <motion.img
                     src={photos[current]}
                     alt={getPhotoAlt(current)}
@@ -159,6 +247,11 @@ export default function Gallery() {
                     animate={{ scale: 1 }}
                     transition={{ duration: 1.5 }}
                     loading="lazy"
+                    onError={(e) => {
+                      // 图片加载失败时显示占位图
+                      e.target.onerror = null;
+                      e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTAwIiBoZWlnaHQ9IjUwMCIgdmlld0JveD0iMCAwIDUwMCA1MDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjUwMCIgaGVpZ2h0PSI1MDAiIGZpbGw9IiNGOEU4RUUiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjI0IiBmaWxsPSIjRjQ3QTlFIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIj7lm77niYfliqDovb3lpLHotKU8L3RleHQ+PC9zdmc+';
+                    }}
                   />
                   
                   {/* 照片渐变遮罩 */}
