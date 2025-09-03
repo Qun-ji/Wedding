@@ -1,5 +1,6 @@
 import sql, { isDatabaseConfigured } from '../database.js';
 
+<<<<<<< HEAD
 // 缓存系统
 const cache = new Map()
 const CACHE_DURATION = 5 * 60 * 1000 // 5分钟
@@ -14,6 +15,9 @@ const checkDatabaseStatus = () => {
 };
 
 // 初始化扩展表 - 优化版
+=======
+// 创建新表和扩展字段的SQL脚本
+>>>>>>> parent of 47df125 (e)
 export const initializeExtendedTables = async () => {
   // 检查数据库配置状态
   if (!checkDatabaseStatus()) {
@@ -115,6 +119,7 @@ export const submitBlessingWithMedia = async (name, message, photoUrl = null, au
   throw lastError || new Error('提交祝福失败，请稍后再试');
 };
 
+<<<<<<< HEAD
 
 
 // 获取带媒体的祝福列表 - 优化版
@@ -167,6 +172,12 @@ export const getBlessingsWithMedia = async (forceRefresh = false) => {
   let retries = 0;
   
   while (retries <= MAX_RETRIES) {
+=======
+// 获取带媒体的祝福列表
+export const getBlessingsWithMedia = async () => {
+  try {
+    // 直接尝试执行JOIN查询，这是最高效的方式
+>>>>>>> parent of 47df125 (e)
     try {
       // 执行基础查询
       const result = await sql`
@@ -176,12 +187,16 @@ export const getBlessingsWithMedia = async (forceRefresh = false) => {
         LIMIT 100; -- 限制返回数量，提高性能
       `;
       
+<<<<<<< HEAD
       // 缓存结果
       cache.set(cacheKey, {
         data: result,
         timestamp: Date.now()
       });
       
+=======
+      // 如果JOIN查询成功，直接返回结果
+>>>>>>> parent of 47df125 (e)
       return result;
     } catch (error) {
       retries++;
@@ -196,8 +211,18 @@ export const getBlessingsWithMedia = async (forceRefresh = false) => {
         return [];
       }
       
+<<<<<<< HEAD
       // 等待一段时间后重试
       await new Promise(resolve => setTimeout(resolve, 1000 * retries));
+=======
+      // 补全缺失的贴纸相关字段
+      return basicResult.map(item => ({
+        ...item,
+        sticker_id: null,
+        sticker_name: null,
+        sticker_image_url: null
+      }));
+>>>>>>> parent of 47df125 (e)
     }
   }
   
@@ -221,15 +246,6 @@ export const setCache = (key, data) => {
     data,
     timestamp: Date.now()
   });
-};
-
-// 清除缓存
-export const clearCache = (key) => {
-  if (key) {
-    cache.delete(key)
-  } else {
-    cache.clear()
-  }
 };
 
 // 上传照片到临时存储（由于是前端模拟，实际项目中应该使用真实的文件存储服务）

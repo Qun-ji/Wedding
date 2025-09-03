@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
+<<<<<<< HEAD
   base: '/',
   // 优化配置
   build: {
@@ -55,4 +56,7 @@ export default defineConfig({
       verbose: true
     },
   },
+=======
+  base: './',
+>>>>>>> parent of 47df125 (e)
 })
